@@ -16,4 +16,10 @@ pub enum ContractError {
 
     #[error("Insufficient balance")]
     InsufficientBalance {},
+
+    #[error("Invalid fund")]
+    InvalidFund {},
+
+    #[error("Deadline not passed")]
+    ShootDeadlineNotPassed {},
 }

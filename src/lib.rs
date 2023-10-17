@@ -1,11 +1,13 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    Coin, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Order, Response, StdResult, Addr
+    BankMsg,CosmosMsg,
+    BankQuery, QueryRequest, Coin, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Order, Response, StdResult, Addr, Uint128, ensure
     // DepsMut, Env, MessageInfo, Response,
 };
 use cw2::set_contract_version;
 use cw_storage_plus::Bound;
+use msg::ContractBalanceResponse;
 use std::ops::Add;
 
 mod error;
@@ -14,7 +16,7 @@ pub mod state;
 use crate::error::ContractError;
 use crate::msg::{EntryResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg};
 // use crate::msg::{ InstantiateMsg};
-use crate::state::{Config, Entry, Priority, Status, CONFIG, ENTRY_SEQ, LIST, TICKET_PRICE, REWARD_PERCENTAGE, ADMIN_PERCENTAGE, SHOOT_DEADLINE_MAPPER};
+use crate::state::{Config, Entry, Priority, Status, CONFIG, ENTRY_SEQ, LIST, SHOOT_DEADLINE_MAPPER};
 // use crate::state::{Config, CONFIG, ENTRY_SEQ};
 
 
@@ -60,7 +62,7 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
@@ -79,6 +81,7 @@ pub fn execute(
         ExecuteMsg::SetTicketPrice { new_ticket_price } => execute_set_ticket_price(deps, info, new_ticket_price),
         ExecuteMsg::SetRewardPercentage { new_reward_percentage } => execute_set_reward_percentage(deps, info, new_reward_percentage),
         ExecuteMsg::SetAdminPercentage { new_admin_percentage } => execute_set_admin_percentage(deps, info, new_admin_percentage),        
+        ExecuteMsg::Shoot {} => execute_shoot(deps, info, env),
     }
 }
 
@@ -87,23 +90,41 @@ pub fn execute_shoot(
     info: MessageInfo,
     env: Env,
 ) -> Result<Response, ContractError> {
+
     let player = info.sender;      
 
-    let shoot_deadline_player = SHOOT_DEADLINE_MAPPER.load(deps.storage, player.clone())?;
+    let may_shoot_deadline_player = SHOOT_DEADLINE_MAPPER.may_load(deps.storage, player.clone())?;
     // Check if the player is already joined
-    if shoot_deadline_player != 0 {
-        //  Assert that the last shoot deadline is passed
-        if shoot_deadline_player > env.block.time.seconds() {
-            return Err(ContractError::ShootDeadlineNotPassed {});
+    match may_shoot_deadline_player {
+        Some(shoot_deadline_player) => {
+            if shoot_deadline_player != 0 {
+                //  Assert that the last shoot deadline is passed
+                if shoot_deadline_player > env.block.time.seconds() {
+                    return Err(ContractError::ShootDeadlineNotPassed {});
+                }
+            }
         }
+        None => {}
     }
 
     // Check if the player has enough balance
-    let balance = deps.querier.query_all_balances(&player)?;
+    // let balance = deps.querier.query_all_balances(&player)?;
+    // let ticket_price = CONFIG.load(deps.storage)?.ticket_price;
+    // if balance[0].amount < ticket_price.into() {
+    //     return Err(ContractError::InsufficientBalance {});
+    // }
+
     let ticket_price = CONFIG.load(deps.storage)?.ticket_price;
-    if balance[0].amount < ticket_price.into() {
-        return Err(ContractError::InsufficientBalance {});
-    }
+    // Check whether funds is passed
+    // ensure!( info.funds == vec![
+    //     Coin {
+    //         denom: "untrn".to_string(),
+    //         amount: Uint128::from(ticket_price),
+    //     }
+    // ], ContractError::InvalidFund {});
+    println!("info.funds: {:?}", info.funds);
+    ensure!( info.funds[0].amount >= Uint128::from(ticket_price), ContractError::InvalidFund {});
+
 
     // Transfer ticket price as Native to the this contract
     // let transfer = Response::new()
@@ -117,37 +138,43 @@ pub fn execute_shoot(
         // .add_attribute("ticket_price", ticket_price.to_string());
 
     // Set the shoot deadline for the player
-    let shoot_deadline = env.block.time.seconds().add(SHOOT_DURATION);
+    let cur_timestamp = env.block.time.seconds();
+    let shoot_deadline = cur_timestamp.add(SHOOT_DURATION);
 
     SHOOT_DEADLINE_MAPPER.save(deps.storage, player.clone(), &shoot_deadline)?;
 
     // let asset = Asset::native("untrn", TICKET_PRICE);
     // Define the amount of tokens to transfer
-    let amount = Coin::new(100, "untrn");
+    // let amount = Coin::new(100, "untrn");
 
     // Transfer the tokens from the sender to the contract
-    let res = deps.querier.transfer(
-        &info.sender,
-        &env.contract.address,
-        vec![amount.clone()],
-    );
+    // let res = deps.querier.transfer(
+    //     &info.sender,
+    //     &env.contract.address,
+    //     vec![amount.clone()],
+    // );
 
     // // Ok(transfer)
-    // Ok(Response::new()
-    //     .add_attribute("method", "execute_shoot"))
-    //     // .add_message(asset.transfer_msg(self)?)
-    //     .add_message(res)
+    Ok(Response::new()
+        .add_attribute("method", "execute_shoot")
+        .add_attribute("deadline", shoot_deadline.to_string())
+        .add_attribute("timestamp", cur_timestamp.to_string()))
+        
+
+        
+        // .add_message(asset.transfer_msg(self)?)
+        // .add_message(res)
     // Check if the transfer was successful
-    match res {
-        Ok(_) => {
-            // Handle the successful transfer
-            Ok(Response::new())
-        }
-        Err(_) => {
-            // Handle the failed transfer
-            Err(StdError::generic_err("Failed to transfer tokens"))
-        }
-    }
+    // match res {
+    //     Ok(_) => {
+    //         // Handle the successful transfer
+    //         Ok(Response::new())
+    //     }
+    //     Err(_) => {
+    //         // Handle the failed transfer
+    //         Err(StdError::generic_err("Failed to transfer tokens"))
+    //     }
+    // }
 }
 
 pub fn execute_set_admin_percentage(
@@ -193,15 +220,12 @@ pub fn execute_set_reward_percentage(
 pub fn execute_set_ticket_price(
     deps: DepsMut,
     info: MessageInfo,
-    new_ticket_price: u64,
+    new_ticket_price: u128,
 ) -> Result<Response, ContractError> {
     let owner = CONFIG.load(deps.storage)?.owner;
     if info.sender != owner {
         return Err(ContractError::Unauthorized {});
     }
-    // TICKET_PRICE.save(deps.storage, &new_ticket_price)?;
-    // CONFIG.
-    // let state = CONFIG.load(deps.storage)?;
     CONFIG.update(deps.storage,
         |mut state| -> Result<_, ContractError> {
             state.ticket_price = new_ticket_price;
@@ -279,7 +303,7 @@ pub fn execute_delete_entry(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::QueryEntry { id } => to_binary(&query_entry(deps, id)?),
         QueryMsg::QueryList { start_after, limit } => {
@@ -287,7 +311,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         },
         QueryMsg::QueryConfig { } => to_binary(&query_config(deps)?),
         QueryMsg::QueryShootDeadline { address } => to_binary(&query_shoot_deadline(deps, address)?),
+        QueryMsg::QueryBalance { } => to_binary(&query_balance(deps, env)?),
     }
+}
+
+fn query_balance(deps: Deps,env: Env) -> StdResult<ContractBalanceResponse> {
+    let balance = deps.querier.query_balance(&env.contract.address, &"untrn".to_string())?;
+    Ok(ContractBalanceResponse {
+        balance: balance.amount.u128(),
+    })
 }
 
 fn query_config(deps: Deps) -> StdResult<Config> {
@@ -334,7 +366,7 @@ pub fn add(left: usize, right: usize) -> usize {
 }
 
 #[cfg(test)]
-mod tests2 {
+mod tes2 {
     use super::*;
 
     #[test]
@@ -346,13 +378,16 @@ mod tests2 {
 
 #[cfg(test)]
 mod tests {
+    use crate::msg::ContractBalanceResponse;
+    
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{attr, from_binary, Addr};
+    use cosmwasm_std::testing::{mock_dependencies, mock_dependencies_with_balances, mock_env, mock_info};
+    use cosmwasm_std::{attr, from_binary, Addr, QuerierWrapper, Empty, BalanceResponse};
     use std::vec::Vec;
 
+
     #[test]
-    fn proper_initialization() {
+    fn test_proper_initialization() {
         let mut deps = mock_dependencies();
         //no owner specified in the instantiation message
         let msg = InstantiateMsg { owner: None };
@@ -395,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn create_update_delete_entry() {
+    fn test_create_update_delete_entry() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info("creator", &[]);
@@ -566,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_set_ticket_price() {
+    fn test_set_ticket_price() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info("creator", &[]);
@@ -600,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn execute_set_percentage() {
+    fn test_set_percentage() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info("creator", &[]);
@@ -656,4 +691,110 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_shoot_for_free_twice_success() {
+
+        let env = mock_env();
+        let mut deps = mock_dependencies_with_balances(&[
+            (env.contract.address.as_str(), &[Coin::new(0, "untrn")]),
+        ]);
+        let info = mock_info("creator", &[]);
+        let msg = InstantiateMsg { owner: None };
+
+        let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        assert_eq!(0, res.messages.len());
+                
+        let ticket_price = CONFIG.load(deps.as_ref().storage).unwrap().ticket_price;        
+        let msg = ExecuteMsg::Shoot { };
+        let info_with_funds = mock_info("creator", &[
+            Coin {
+                denom: "untrn".to_string(),
+                amount: Uint128::from(ticket_price),
+            }
+        ]);
+        let res = execute(deps.as_mut(), env.clone(), info_with_funds.clone(), msg).unwrap();
+
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("method", "execute_shoot"),
+                attr("deadline", env.block.time.seconds().add(SHOOT_DURATION).to_string()),
+                attr("timestamp", env.block.time.seconds().to_string())
+            ]
+        );
+
+        let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryShootDeadline { address: Addr::unchecked("creator".to_string()) }).unwrap();
+        let shoot_deadline: u64 = from_binary(&res).unwrap();
+        assert_eq!(shoot_deadline, env.block.time.seconds().add(SHOOT_DURATION));
+
+    }
+
+    #[test]
+    fn test_shoot_10ntrn_success() {
+
+        let env = mock_env();
+        let contract_address = env.contract.address.clone();
+        let mut deps = mock_dependencies_with_balances(&[
+            (env.contract.address.as_str(), &[Coin::new(1000, "untrn")]),
+            ("player", &[Coin::new(100, "untrn")]),
+        ]);
+
+        let info = mock_info("creator", &[]);
+        let msg = InstantiateMsg { owner: Some("creator".to_string()) };
+
+        let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        //set ticket price
+        let msg = ExecuteMsg::SetTicketPrice { new_ticket_price: 10 };
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("method", "execute_set_ticket_price"),
+                attr("new_ticket_price", "10")
+            ]
+        );
+
+        let ticket_price = CONFIG.load(deps.as_ref().storage).unwrap().ticket_price;        
+        let info_with_funds = mock_info("player", &[
+            Coin {
+                denom: "untrn".to_string(),
+                // amount: Uint128::from(ticket_price),
+                amount: Uint128::from(10000000000u128),
+            }
+        ]);
+        println!("sending ticket_price: {}", info_with_funds.funds[0].amount);
+        
+        // execute shoot
+        let msg = ExecuteMsg::Shoot {};
+        let res = execute(deps.as_mut(), env.clone(), info_with_funds.clone(), msg).unwrap();
+        // check response
+        assert_eq!(
+            res.attributes,
+            vec![
+                attr("method", "execute_shoot"),
+                attr("deadline", env.block.time.seconds().add(SHOOT_DURATION).to_string()),
+                attr("timestamp", env.block.time.seconds().to_string())
+            ]
+        );
+        println!("res: {:?}", res);
+
+        //check if deadline is set
+        let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryShootDeadline { address: Addr::unchecked("player".to_string()) }).unwrap();
+        let shoot_deadline: u64 = from_binary(&res).unwrap();
+        assert_eq!(shoot_deadline, env.block.time.seconds().add(SHOOT_DURATION));
+
+
+        // log the balances
+        let msg = QueryRequest::Bank(BankQuery::Balance { address: env.contract.address.to_string(), denom: "untrn".to_string() });
+        let res = deps.querier.handle_query(&msg).unwrap();
+        let balance : BalanceResponse = from_binary(&res.unwrap()).unwrap();
+        println!("final contract bal: {}", balance.amount.amount);
+        let msg = QueryRequest::Bank(BankQuery::Balance { address: "player".to_string(), denom: "untrn".to_string() });
+        let res = deps.querier.handle_query(&msg).unwrap();
+        let balance : BalanceResponse = from_binary(&res.unwrap()).unwrap();
+        println!("final player bal: {}", balance.amount.amount);
+        
+    }
 }

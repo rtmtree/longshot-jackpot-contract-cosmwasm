@@ -24,7 +24,7 @@ pub enum ExecuteMsg {
         id: u64,
     },
     SetTicketPrice {
-        new_ticket_price: u64,
+        new_ticket_price: u128,
     },
     SetRewardPercentage {
         new_reward_percentage: u8,
@@ -32,6 +32,7 @@ pub enum ExecuteMsg {
     SetAdminPercentage {
         new_admin_percentage: u8,
     },
+    Shoot {}
 }
 
 #[cw_serde]
@@ -48,7 +49,9 @@ pub enum QueryMsg {
     QueryConfig {},
     #[returns(ShootDeadlineResponse)]
     QueryShootDeadline { address: Addr },
-    
+    #[returns(ContractBalanceResponse)]
+    QueryBalance { },
+
 }
 
 // We define a custom struct for each query response
@@ -73,4 +76,9 @@ pub struct ConfigResponse {
 #[cw_serde]
 pub struct ShootDeadlineResponse {
     pub shoot_deadline: u64,
+}
+
+#[cw_serde]
+pub struct ContractBalanceResponse {
+    pub balance: u128,
 }
