@@ -1,0 +1,17 @@
+[package]
+name = "cosmwasm_counter"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cosmwasm-std = "1.1.0"
+cosmwasm-storage = "1.1.0"
+cw-storage-plus = "0.13.4"
+cosmwasm-schema = "1.1.0"
+cw2 = "0.13.4"
+thiserror = "1.0.31"
+
+[dev-dependencies]
+cw-multi-test = "0.13.4"
