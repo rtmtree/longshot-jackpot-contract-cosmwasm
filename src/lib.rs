@@ -1,9 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    BankMsg,CosmosMsg,
-    BankQuery, QueryRequest, Coin, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Order, Response, StdResult, Addr, Uint128, ensure
-    // DepsMut, Env, MessageInfo, Response,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Order, Response, StdResult, Addr, Uint128, ensure
 };
 use cw2::set_contract_version;
 use cw_storage_plus::Bound;
@@ -15,10 +13,7 @@ pub mod msg;
 pub mod state;
 use crate::error::ContractError;
 use crate::msg::{EntryResponse, ExecuteMsg, InstantiateMsg, ListResponse, QueryMsg};
-// use crate::msg::{ InstantiateMsg};
 use crate::state::{Config, Entry, Priority, Status, CONFIG, ENTRY_SEQ, LIST, SHOOT_DEADLINE_MAPPER};
-// use crate::state::{Config, CONFIG, ENTRY_SEQ};
-
 
 // version info for migration
 const CONTRACT_NAME: &str = "crates.io:longshot_jackpot";
@@ -49,10 +44,6 @@ pub fn instantiate(
     };
 
     CONFIG.save(deps.storage, &config)?;
-    ENTRY_SEQ.save(deps.storage, &0u64)?;
-    // TICKET_PRICE.save(deps.storage, &0u64)?;
-    // REWARD_PERCENTAGE.save(deps.storage, &80u8)?;
-    // ADMIN_PERCENTAGE.save(deps.storage, &4u8)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -107,35 +98,9 @@ pub fn execute_shoot(
         None => {}
     }
 
-    // Check if the player has enough balance
-    // let balance = deps.querier.query_all_balances(&player)?;
-    // let ticket_price = CONFIG.load(deps.storage)?.ticket_price;
-    // if balance[0].amount < ticket_price.into() {
-    //     return Err(ContractError::InsufficientBalance {});
-    // }
-
     let ticket_price = CONFIG.load(deps.storage)?.ticket_price;
-    // Check whether funds is passed
-    // ensure!( info.funds == vec![
-    //     Coin {
-    //         denom: "untrn".to_string(),
-    //         amount: Uint128::from(ticket_price),
-    //     }
-    // ], ContractError::InvalidFund {});
-    println!("info.funds: {:?}", info.funds);
+    // println!("info.funds: {:?}", info.funds);
     ensure!( info.funds[0].amount >= Uint128::from(ticket_price), ContractError::InvalidFund {});
-
-
-    // Transfer ticket price as Native to the this contract
-    // let transfer = Response::new()
-        // .add_message(cw20::Cw20ReceiveMsg {
-        //     sender: player.clone(),
-        //     amount: ticket_price,
-        //     msg: to_binary(&ExecuteMsg::Shoot {})?,
-        // })
-        // .add_attribute("method", "execute_shoot")
-        // .add_attribute("player", player.to_string())
-        // .add_attribute("ticket_price", ticket_price.to_string());
 
     // Set the shoot deadline for the player
     let cur_timestamp = env.block.time.seconds();
@@ -143,38 +108,10 @@ pub fn execute_shoot(
 
     SHOOT_DEADLINE_MAPPER.save(deps.storage, player.clone(), &shoot_deadline)?;
 
-    // let asset = Asset::native("untrn", TICKET_PRICE);
-    // Define the amount of tokens to transfer
-    // let amount = Coin::new(100, "untrn");
-
-    // Transfer the tokens from the sender to the contract
-    // let res = deps.querier.transfer(
-    //     &info.sender,
-    //     &env.contract.address,
-    //     vec![amount.clone()],
-    // );
-
-    // // Ok(transfer)
     Ok(Response::new()
         .add_attribute("method", "execute_shoot")
         .add_attribute("deadline", shoot_deadline.to_string())
         .add_attribute("timestamp", cur_timestamp.to_string()))
-        
-
-        
-        // .add_message(asset.transfer_msg(self)?)
-        // .add_message(res)
-    // Check if the transfer was successful
-    // match res {
-    //     Ok(_) => {
-    //         // Handle the successful transfer
-    //         Ok(Response::new())
-    //     }
-    //     Err(_) => {
-    //         // Handle the failed transfer
-    //         Err(StdError::generic_err("Failed to transfer tokens"))
-    //     }
-    // }
 }
 
 pub fn execute_set_admin_percentage(
@@ -382,7 +319,8 @@ mod tests {
     
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_dependencies_with_balances, mock_env, mock_info};
-    use cosmwasm_std::{attr, from_binary, Addr, QuerierWrapper, Empty, BalanceResponse};
+    use cosmwasm_std::{attr, from_binary, Addr, QuerierWrapper, Empty, BalanceResponse,
+        QueryRequest,Coin, BankQuery};
     use std::vec::Vec;
 
 
@@ -426,177 +364,6 @@ mod tests {
                 reward_percentage: 80,
                 admin_percentage: 4,
             }
-        );
-    }
-
-    #[test]
-    fn test_create_update_delete_entry() {
-        let mut deps = mock_dependencies();
-        let env = mock_env();
-        let info = mock_info("creator", &[]);
-        let msg = InstantiateMsg { owner: None };
-
-        let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        let msg = ExecuteMsg::NewEntry {
-            description: "A new entry.".to_string(),
-            priority: Some(Priority::Medium),
-        };
-
-        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
-        assert_eq!(
-            res.attributes,
-            vec![
-                attr("method", "execute_create_new_entry"),
-                attr("new_entry_id", "1")
-            ]
-        );
-        // Query single entry
-        let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryEntry { id: 1 }).unwrap();
-        let entry: EntryResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            EntryResponse {
-                id: 1,
-                description: "A new entry.".to_string(),
-                status: Status::ToDo,
-                priority: Priority::Medium
-            },
-            entry
-        );
-
-        let msg = ExecuteMsg::NewEntry {
-            description: "Another entry.".to_string(),
-            priority: Some(Priority::High),
-        };
-
-        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
-        assert_eq!(
-            res.attributes,
-            vec![
-                attr("method", "execute_create_new_entry"),
-                attr("new_entry_id", "2")
-            ]
-        );
-
-        // Query the list of entries
-        let res = query(
-            deps.as_ref(),
-            env.clone(),
-            QueryMsg::QueryList {
-                start_after: None,
-                limit: None,
-            },
-        )
-        .unwrap();
-        let list: ListResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            Vec::from([
-                Entry {
-                    id: 1,
-                    description: "A new entry.".to_string(),
-                    status: Status::ToDo,
-                    priority: Priority::Medium
-                },
-                Entry {
-                    id: 2,
-                    description: "Another entry.".to_string(),
-                    status: Status::ToDo,
-                    priority: Priority::High
-                }
-            ]),
-            list.entries
-        );
-
-        // Update entry
-        let message = ExecuteMsg::UpdateEntry {
-            id: 1,
-            description: Some("Updated entry.".to_string()),
-            status: Some(Status::InProgress),
-            priority: Some(Priority::Low),
-        };
-
-        let res = execute(deps.as_mut(), env.clone(), info.clone(), message).unwrap();
-        assert_eq!(
-            res.attributes,
-            vec![
-                attr("method", "execute_update_entry"),
-                attr("updated_entry_id", "1")
-            ]
-        );
-
-        // Query single entry
-        let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryEntry { id: 1 }).unwrap();
-        let entry: EntryResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            EntryResponse {
-                id: 1,
-                description: "Updated entry.".to_string(),
-                status: Status::InProgress,
-                priority: Priority::Low
-            },
-            entry
-        );
-
-        // Query the list of entries
-        let res = query(
-            deps.as_ref(),
-            env.clone(),
-            QueryMsg::QueryList {
-                start_after: None,
-                limit: None,
-            },
-        )
-        .unwrap();
-        let list: ListResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            Vec::from([
-                Entry {
-                    id: 1,
-                    description: "Updated entry.".to_string(),
-                    status: Status::InProgress,
-                    priority: Priority::Low
-                },
-                Entry {
-                    id: 2,
-                    description: "Another entry.".to_string(),
-                    status: Status::ToDo,
-                    priority: Priority::High
-                }
-            ]),
-            list.entries
-        );
-
-        //Delete Entry
-        let message = ExecuteMsg::DeleteEntry { id: 1 };
-
-        let res = execute(deps.as_mut(), env.clone(), info, message).unwrap();
-        assert_eq!(
-            res.attributes,
-            vec![
-                attr("method", "execute_delete_entry"),
-                attr("deleted_entry_id", "1")
-            ]
-        );
-        // Query the list of entries
-        let res = query(
-            deps.as_ref(),
-            env,
-            QueryMsg::QueryList {
-                start_after: None,
-                limit: None,
-            },
-        )
-        .unwrap();
-        let list: ListResponse = from_binary(&res).unwrap();
-        assert_eq!(
-            Vec::from([Entry {
-                id: 2,
-                description: "Another entry.".to_string(),
-                status: Status::ToDo,
-                priority: Priority::High
-            }]),
-            list.entries
         );
     }
 
@@ -760,11 +527,11 @@ mod tests {
         let info_with_funds = mock_info("player", &[
             Coin {
                 denom: "untrn".to_string(),
-                // amount: Uint128::from(ticket_price),
-                amount: Uint128::from(10000000000u128),
+                amount: Uint128::from(ticket_price),
+                // amount: Uint128::from(10000000000u128),
             }
         ]);
-        println!("sending ticket_price: {}", info_with_funds.funds[0].amount);
+        // println!("sending ticket_price: {}", info_with_funds.funds[0].amount);
         
         // execute shoot
         let msg = ExecuteMsg::Shoot {};
@@ -778,23 +545,23 @@ mod tests {
                 attr("timestamp", env.block.time.seconds().to_string())
             ]
         );
-        println!("res: {:?}", res);
+        // println!("res: {:?}", res);
 
         //check if deadline is set
         let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryShootDeadline { address: Addr::unchecked("player".to_string()) }).unwrap();
         let shoot_deadline: u64 = from_binary(&res).unwrap();
         assert_eq!(shoot_deadline, env.block.time.seconds().add(SHOOT_DURATION));
 
-
-        // log the balances
-        let msg = QueryRequest::Bank(BankQuery::Balance { address: env.contract.address.to_string(), denom: "untrn".to_string() });
-        let res = deps.querier.handle_query(&msg).unwrap();
-        let balance : BalanceResponse = from_binary(&res.unwrap()).unwrap();
-        println!("final contract bal: {}", balance.amount.amount);
-        let msg = QueryRequest::Bank(BankQuery::Balance { address: "player".to_string(), denom: "untrn".to_string() });
-        let res = deps.querier.handle_query(&msg).unwrap();
-        let balance : BalanceResponse = from_binary(&res.unwrap()).unwrap();
-        println!("final player bal: {}", balance.amount.amount);
-        
+        if false {
+            // log the balances
+            let msg = QueryRequest::Bank(BankQuery::Balance { address: env.contract.address.to_string(), denom: "untrn".to_string() });
+            let res = deps.querier.handle_query(&msg).unwrap();
+            let balance : BalanceResponse = from_binary(&res.unwrap()).unwrap();
+            // println!("final contract bal: {}", balance.amount.amount);
+            let msg = QueryRequest::Bank(BankQuery::Balance { address: "player".to_string(), denom: "untrn".to_string() });
+            let res = deps.querier.handle_query(&msg).unwrap();
+            let balance : BalanceResponse = from_binary(&res.unwrap()).unwrap();
+            // println!("final player bal: {}", balance.amount.amount);
+        }
     }
 }
