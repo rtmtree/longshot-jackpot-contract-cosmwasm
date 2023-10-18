@@ -12,7 +12,7 @@ Coming soon...
 ## Deployed Smart Contract
 
 **Osmosis Testnet**: 
-[osmo1a2scpnkjk5eahx43d8q2e6lnux229eykkdp6yvgjk7dsuftal53qh2ahx6](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1a2scpnkjk5eahx43d8q2e6lnux229eykkdp6yvgjk7dsuftal53qh2ahx6)
+[osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj)
 
 **Neutron Mainnet**: 
 Coming soon...
@@ -21,7 +21,7 @@ Coming soon...
 You can support this game to ENRICH the prize pool by donating \$OSMO, \$NTRN (depended on the network) to the contract address at 
 
 **Osmosis Testnet**: 
-[osmo1a2scpnkjk5eahx43d8q2e6lnux229eykkdp6yvgjk7dsuftal53qh2ahx6](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1a2scpnkjk5eahx43d8q2e6lnux229eykkdp6yvgjk7dsuftal53qh2ahx6)
+[osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj)
 
 **Neutron Mainnet**: 
 Coming soon...
