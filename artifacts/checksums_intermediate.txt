@@ -1,0 +1,1 @@
+08540e75e063046447c0e6e82e4b867c7264674b34859e086d15fa600f0896e8  /target/wasm32-unknown-unknown/release/longshot_jackpot.wasm
