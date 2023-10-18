@@ -1,1 +1,1 @@
-edf0bb0582fcc8ab0516da3f85d4f3fda115e71ea1467d18799aa8097c2cafb1  longshot_jackpot.wasm
+7d7cfc9c7dc9494bce94864948c0ce5cc5da1a7b64a6248b2a55641224d03bc7  longshot_jackpot.wasm
