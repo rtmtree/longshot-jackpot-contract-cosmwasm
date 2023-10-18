@@ -7,9 +7,12 @@ use cw2::set_contract_version;
 use cw_asset::Asset;
 use std::ops::Add;
 
+use crate::msg::{
+    ConfigResponse, ContractBalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
+    ShootDeadlineResponse,
+};
 use crate::error::ContractError;
-use crate::msg::{ContractBalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Config, CONFIG, SHOOT_DEADLINE_MAPPER};
+use crate::state::{Config, CONFIG, MAIN_DENOM, SHOOT_DEADLINE_MAPPER};
 
 // version info for migration
 const CONTRACT_NAME: &str = "crates.io:longshot_jackpot";
@@ -17,9 +20,6 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // constants
 const SHOOT_DURATION: u64 = 90; // 90 seconds
-
-// main denom, depends on the chain , "uosmo" for osmosis , "untrn" for neutron
-const MAIN_DENOM: &str = "uosmo";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -40,13 +40,22 @@ pub fn instantiate(
         ticket_price: 0,
         reward_percentage: 80,
         admin_percentage: 4,
+        shoot_duration: 90,
     };
 
     CONFIG.save(deps.storage, &config)?;
 
+    // main denom, depends on the chain
+    // "uosmo" for osmosis,
+    // "untrn" for neutron,
+    // "usei" for sei,
+    // "uluna" for terra,
+    MAIN_DENOM.save(deps.storage, &msg.main_denom)?;
+
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", owner))
+        .add_attribute("owner", owner)
+        .add_attribute("main_denom", msg.main_denom))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -97,11 +106,12 @@ pub fn execute_shoot(
     // Check if the player has enough funds to shoot
     ensure!(info.funds.len() >= 1, ContractError::InvalidFund {});
     let cur_ticket_price = CONFIG.load(deps.storage)?.ticket_price;
+    let main_denom = MAIN_DENOM.load(deps.storage)?;
     ensure!(
-        info.funds[0].denom == MAIN_DENOM.to_string()
+        info.funds[0].denom == main_denom.to_string()
             && info.funds[0].amount.u128() == cur_ticket_price,
         ContractError::InvalidPriceIndex0 {
-            expected_denom: MAIN_DENOM.to_string(),
+            expected_denom: main_denom.to_string(),
             expected_amount: cur_ticket_price,
             actual_denom: info.funds[0].denom.clone(),
             actual_amount: info.funds[0].amount.u128(),
@@ -147,11 +157,12 @@ pub fn execute_goal_shot(
 
     // Get how much reward the player should get
     let config = CONFIG.load(deps.storage)?;
+    let main_denom = MAIN_DENOM.load(deps.storage)?;
     let reward_percentage = config.reward_percentage;
     let admin_percentage = config.admin_percentage;
     let contract_balance = deps
         .querier
-        .query_balance(&env.contract.address, &MAIN_DENOM.to_string())?
+        .query_balance(&env.contract.address, &main_denom.to_string())?
         .amount
         .u128();
     let reward_amount = contract_balance * reward_percentage as u128 / 100;
@@ -167,13 +178,13 @@ pub fn execute_goal_shot(
     // Transfer reward to the admin
     if admin_amount > 0 {
         let admin = config.owner;
-        let asset = Asset::native(MAIN_DENOM, admin_amount);
+        let asset = Asset::native(main_denom.clone(), admin_amount);
         attrs.push(("reward_transfer_to_admin", admin_amount.to_string()));
         msgs.push(asset.transfer_msg(admin)?);
     }
 
     if reward_amount > 0 {
-        let asset = Asset::native(MAIN_DENOM, reward_amount);
+        let asset = Asset::native(main_denom, reward_amount);
         attrs.push(("reward_transfer", reward_amount.to_string()));
         msgs.push(asset.transfer_msg(player_address)?);
     }
@@ -246,23 +257,32 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-fn query_balance(deps: Deps, env: Env) -> StdResult<ContractBalanceResponse> {
-    let balance = deps
-        .querier
-        .query_balance(&env.contract.address, &MAIN_DENOM.to_string())?;
-    Ok(ContractBalanceResponse {
-        amount: balance.amount.u128(),
+fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    Ok(ConfigResponse {
+        owner: config.owner.to_string(),
+        ticket_price: config.ticket_price,
+        reward_percentage: config.reward_percentage,
+        admin_percentage: config.admin_percentage,
+        shoot_duration: config.shoot_duration,
     })
 }
 
-fn query_config(deps: Deps) -> StdResult<Config> {
-    let config = CONFIG.load(deps.storage)?;
-    Ok(config)
+fn query_shoot_deadline(deps: Deps, address: Addr) -> StdResult<ShootDeadlineResponse> {
+    let shoot_deadline = SHOOT_DEADLINE_MAPPER.load(deps.storage, address)?;
+    Ok(ShootDeadlineResponse {
+        shoot_deadline: shoot_deadline,
+    })
 }
 
-fn query_shoot_deadline(deps: Deps, address: Addr) -> StdResult<u64> {
-    let shoot_deadline = SHOOT_DEADLINE_MAPPER.load(deps.storage, address)?;
-    Ok(shoot_deadline)
+fn query_balance(deps: Deps, env: Env) -> StdResult<ContractBalanceResponse> {
+    let main_denom = MAIN_DENOM.load(deps.storage)?;
+    let balance = deps
+        .querier
+        .query_balance(&env.contract.address, &main_denom.to_string())?;
+    Ok(ContractBalanceResponse {
+        amount: balance.amount.u128(),
+    })
 }
 
 #[cfg(test)]
@@ -277,7 +297,10 @@ mod tests {
     fn test_proper_initialization() {
         let mut deps = mock_dependencies();
         //no owner specified in the instantiation message
-        let msg = InstantiateMsg { owner: None };
+        let msg = InstantiateMsg {
+            owner: None,
+            main_denom: "usei".to_string(),
+        };
         let env = mock_env();
         let info = mock_info("creator", &[]);
 
@@ -293,11 +316,13 @@ mod tests {
                 ticket_price: 0,
                 reward_percentage: 80,
                 admin_percentage: 4,
+                shoot_duration: 90
             }
         );
         //specifying an owner address in the instantiation message
         let msg = InstantiateMsg {
             owner: Some("specified_owner".to_string()),
+            main_denom: "usei".to_string(),
         };
 
         let res = instantiate(deps.as_mut(), env, info, msg).unwrap();
@@ -312,6 +337,7 @@ mod tests {
                 ticket_price: 0,
                 reward_percentage: 80,
                 admin_percentage: 4,
+                shoot_duration: 90
             }
         );
     }
@@ -321,7 +347,10 @@ mod tests {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info("creator", &[]);
-        let msg = InstantiateMsg { owner: None };
+        let msg = InstantiateMsg {
+            owner: None,
+            main_denom: "usei".to_string(),
+        };
 
         let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
         assert_eq!(0, res.messages.len());
@@ -347,6 +376,7 @@ mod tests {
                 ticket_price: 100,
                 reward_percentage: 80,
                 admin_percentage: 4,
+                shoot_duration: 90
             },
             config
         );
@@ -357,7 +387,10 @@ mod tests {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info("creator", &[]);
-        let msg = InstantiateMsg { owner: None };
+        let msg = InstantiateMsg {
+            owner: None,
+            main_denom: "usei".to_string(),
+        };
 
         let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
         assert_eq!(0, res.messages.len());
@@ -383,6 +416,7 @@ mod tests {
                 ticket_price: 0,
                 reward_percentage: 90,
                 admin_percentage: 4,
+                shoot_duration: 90
             },
             config
         );
@@ -408,6 +442,7 @@ mod tests {
                 ticket_price: 0,
                 reward_percentage: 90,
                 admin_percentage: 10,
+                shoot_duration: 90
             },
             config
         );
@@ -416,12 +451,16 @@ mod tests {
     #[test]
     fn test_shoot_for_free_twice_success() {
         let env = mock_env();
+        let main_denom = "usei";
         let mut deps = mock_dependencies_with_balances(&[(
             env.contract.address.as_str(),
-            &[Coin::new(0, MAIN_DENOM)],
+            &[Coin::new(0, main_denom)],
         )]);
         let info = mock_info("creator", &[]);
-        let msg = InstantiateMsg { owner: None };
+        let msg = InstantiateMsg {
+            owner: None,
+            main_denom: main_denom.to_string(),
+        };
 
         let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
         assert_eq!(0, res.messages.len());
@@ -431,7 +470,7 @@ mod tests {
         let info_with_funds = mock_info(
             "creator",
             &[Coin {
-                denom: MAIN_DENOM.to_string(),
+                denom: main_denom.to_string(),
                 amount: Uint128::from(ticket_price),
             }],
         );
@@ -457,24 +496,28 @@ mod tests {
             },
         )
         .unwrap();
-        let shoot_deadline: u64 = from_binary(&res).unwrap();
+        let shoot_deadline: u64 = from_binary::<ShootDeadlineResponse>(&res)
+            .unwrap()
+            .shoot_deadline;
         assert_eq!(shoot_deadline, env.block.time.seconds().add(SHOOT_DURATION));
     }
 
     #[test]
     fn test_shoot_10ntrn_success() {
         let env = mock_env();
+        let main_denom = "usei";
         let mut deps = mock_dependencies_with_balances(&[
             (
                 env.contract.address.as_str(),
-                &[Coin::new(1000, MAIN_DENOM)],
+                &[Coin::new(1000, main_denom)],
             ),
-            ("player", &[Coin::new(100, MAIN_DENOM)]),
+            ("player", &[Coin::new(100, main_denom)]),
         ]);
 
         let info = mock_info("creator", &[]);
         let msg = InstantiateMsg {
             owner: Some("creator".to_string()),
+            main_denom: main_denom.to_string(),
         };
 
         let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
@@ -497,7 +540,7 @@ mod tests {
         let info_with_funds = mock_info(
             "player",
             &[Coin {
-                denom: MAIN_DENOM.to_string(),
+                denom: main_denom.to_string(),
                 amount: Uint128::from(ticket_price),
             }],
         );
@@ -527,21 +570,25 @@ mod tests {
             },
         )
         .unwrap();
-        let shoot_deadline: u64 = from_binary(&res).unwrap();
+        let shoot_deadline: u64 = from_binary::<ShootDeadlineResponse>(&res)
+            .unwrap()
+            .shoot_deadline;
         assert_eq!(shoot_deadline, env.block.time.seconds().add(SHOOT_DURATION));
     }
 
     #[test]
     fn test_shoot_10ntrn_and_goal_shot_success() {
         let mut env = mock_env();
+        let main_denom = "usei";
         let mut deps = mock_dependencies_with_balances(&[
-            (env.contract.address.as_str(), &[Coin::new(100, MAIN_DENOM)]),
-            ("player", &[Coin::new(100, MAIN_DENOM)]),
+            (env.contract.address.as_str(), &[Coin::new(100, main_denom)]),
+            ("player", &[Coin::new(100, main_denom)]),
         ]);
 
         let info = mock_info("creator", &[]);
         let msg = InstantiateMsg {
             owner: Some("creator".to_string()),
+            main_denom: main_denom.to_string(),
         };
 
         let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
@@ -564,7 +611,7 @@ mod tests {
         let info_with_funds = mock_info(
             "player",
             &[Coin {
-                denom: MAIN_DENOM.to_string(),
+                denom: main_denom.to_string(),
                 amount: Uint128::from(ticket_price),
             }],
         );
@@ -594,7 +641,9 @@ mod tests {
             },
         )
         .unwrap();
-        let shoot_deadline: u64 = from_binary(&res).unwrap();
+        let shoot_deadline: u64 = from_binary::<ShootDeadlineResponse>(&res)
+            .unwrap()
+            .shoot_deadline;
         assert_eq!(shoot_deadline, env.block.time.seconds().add(SHOOT_DURATION));
 
         env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 50);

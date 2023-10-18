@@ -4,6 +4,7 @@ use cosmwasm_std::Addr;
 #[cw_serde]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
+    pub main_denom: String,
 }
 
 #[cw_serde]
@@ -30,9 +31,10 @@ pub enum QueryMsg {
 #[cw_serde]
 pub struct ConfigResponse {
     pub owner: String,
-    pub ticket_price: u64,
+    pub ticket_price: u128,
     pub reward_percentage: u8,
     pub admin_percentage: u8,
+    pub shoot_duration: u8,
 }
 
 #[cw_serde]
