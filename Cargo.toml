@@ -12,9 +12,17 @@ cw-storage-plus = "0.13.4"
 cosmwasm-schema = "1.1.0"
 cw2 = "0.13.4"
 thiserror = "1.0.31"
+cw-asset = "2.3.0"
 
 [dev-dependencies]
 cw-multi-test = "0.13.4"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[package.metadata.scripts]
+optimize = """docker run --rm -v "$(pwd)":/code \
+  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+  cosmwasm/rust-optimizer:0.13.0
+"""
