@@ -8,7 +8,7 @@ use cw_asset::Asset;
 use std::ops::Add;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg,ContractBalanceResponse};
+use crate::msg::{ContractBalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{Config, CONFIG, SHOOT_DEADLINE_MAPPER};
 
 // version info for migration
@@ -160,23 +160,25 @@ pub fn execute_goal_shot(
     // Init response
     let res = Response::new()
         .add_attribute("method", "goal_shot")
-        .add_attribute("reward_amount", reward_amount.to_string());
+        .add_attribute("pre_balance", contract_balance.to_string());
 
+    let mut attrs = vec![];
+    let mut msgs = vec![];
     // Transfer reward to the admin
     if admin_amount > 0 {
         let admin = config.owner;
         let asset = Asset::native(MAIN_DENOM, admin_amount);
-        res.clone().add_message(asset.transfer_msg(admin)?);
+        attrs.push(("reward_transfer_to_admin", admin_amount.to_string()));
+        msgs.push(asset.transfer_msg(admin)?);
     }
 
     if reward_amount > 0 {
         let asset = Asset::native(MAIN_DENOM, reward_amount);
-        res.clone()
-            .add_attribute("reward", reward_amount.to_string())
-            .add_message(asset.transfer_msg(player_address)?);
+        attrs.push(("reward_transfer", reward_amount.to_string()));
+        msgs.push(asset.transfer_msg(player_address)?);
     }
 
-    Ok(res)
+    Ok(res.add_attributes(attrs).add_messages(msgs))
 }
 
 pub fn execute_set_admin_percentage(
@@ -601,6 +603,7 @@ mod tests {
         let res = query(deps.as_ref(), env.clone(), QueryMsg::QueryBalance {}).unwrap();
         let contract_balance: ContractBalanceResponse = from_binary(&res).unwrap();
         let reward_amount = contract_balance.amount * 80 / 100;
+        let admin_amount = contract_balance.amount * 4 / 100;
 
         // goal shot
         let msg = ExecuteMsg::GoalShot {
@@ -614,7 +617,9 @@ mod tests {
             res.attributes,
             vec![
                 attr("method", "goal_shot"),
-                attr("reward_amount", reward_amount.to_string()),
+                attr("pre_balance", contract_balance.amount.to_string()),
+                attr("reward_transfer_to_admin", admin_amount.to_string()),
+                attr("reward_transfer", reward_amount.to_string()),
             ]
         );
     }
