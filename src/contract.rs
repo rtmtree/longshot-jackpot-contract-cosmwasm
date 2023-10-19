@@ -7,11 +7,11 @@ use cw2::set_contract_version;
 use cw_asset::Asset;
 use std::ops::Add;
 
+use crate::error::ContractError;
 use crate::msg::{
     ConfigResponse, ContractBalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg,
     ShootDeadlineResponse,
 };
-use crate::error::ContractError;
 use crate::state::{Config, CONFIG, MAIN_DENOM, SHOOT_DEADLINE_MAPPER};
 
 // version info for migration
@@ -89,22 +89,24 @@ pub fn execute_shoot(
 ) -> Result<Response, ContractError> {
     let player = info.sender;
 
+    // === Uncomment this to let user wait til the deadline pass before reshoot ===
     // Check if the player is already joined
-    let may_shoot_deadline_player = SHOOT_DEADLINE_MAPPER.may_load(deps.storage, player.clone())?;
-    match may_shoot_deadline_player {
-        Some(shoot_deadline_player) => {
-            if shoot_deadline_player != 0 {
-                //  Assert that the last shoot deadline is passed
-                if shoot_deadline_player > env.block.time.seconds() {
-                    return Err(ContractError::ShootDeadlineNotPassed {});
-                }
-            }
-        }
-        None => {}
-    }
+    // let may_shoot_deadline_player = SHOOT_DEADLINE_MAPPER.may_load(deps.storage, player.clone())?;
+    // match may_shoot_deadline_player {
+    //     Some(shoot_deadline_player) => {
+    //         if shoot_deadline_player != 0 {
+    //             //  Assert that the last shoot deadline is passed
+    //             if shoot_deadline_player > env.block.time.seconds() {
+    //                 return Err(ContractError::ShootDeadlineNotPassed {});
+    //             }
+    //         }
+    //     }
+    //     None => {}
+    // }
+    // ============================================================================
 
     // Check if the player has enough funds to shoot
-    ensure!(info.funds.len() >= 1, ContractError::InvalidFund {});
+    ensure!(!info.funds.is_empty(), ContractError::InvalidFund {});
     let cur_ticket_price = CONFIG.load(deps.storage)?.ticket_price;
     let main_denom = MAIN_DENOM.load(deps.storage)?;
     ensure!(
@@ -125,8 +127,7 @@ pub fn execute_shoot(
 
     Ok(Response::new()
         .add_attribute("method", "execute_shoot")
-        .add_attribute("deadline", shoot_deadline.to_string())
-        .add_attribute("timestamp", cur_timestamp.to_string()))
+        .add_attribute("shoot_deadline", shoot_deadline.to_string()))
 }
 
 pub fn execute_goal_shot(
@@ -481,10 +482,9 @@ mod tests {
             vec![
                 attr("method", "execute_shoot"),
                 attr(
-                    "deadline",
+                    "shoot_deadline",
                     env.block.time.seconds().add(SHOOT_DURATION).to_string()
                 ),
-                attr("timestamp", env.block.time.seconds().to_string())
             ]
         );
 
@@ -554,10 +554,9 @@ mod tests {
             vec![
                 attr("method", "execute_shoot"),
                 attr(
-                    "deadline",
+                    "shoot_deadline",
                     env.block.time.seconds().add(SHOOT_DURATION).to_string()
-                ),
-                attr("timestamp", env.block.time.seconds().to_string())
+                )
             ]
         );
 
@@ -625,10 +624,9 @@ mod tests {
             vec![
                 attr("method", "execute_shoot"),
                 attr(
-                    "deadline",
+                    "shoot_deadline",
                     env.block.time.seconds().add(SHOOT_DURATION).to_string()
-                ),
-                attr("timestamp", env.block.time.seconds().to_string())
+                )
             ]
         );
 
