@@ -12,7 +12,7 @@ This work is a Cosmwasm version of [Aptos Longshot Jackpot](https://github.com/r
 ## Deployed Smart Contract
 
 **Osmosis Testnet**: 
-[osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj)
+[osmo1k46edlk4n33jm98lallgwypcpjagu8zmxjdq76s0v5yns0nphjkq2cwn3d](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1k46edlk4n33jm98lallgwypcpjagu8zmxjdq76s0v5yns0nphjkq2cwn3d)
 
 **Neutron Mainnet**: 
 Coming soon...
@@ -21,7 +21,7 @@ Coming soon...
 You can support this game to ENRICH the prize pool by donating \$OSMO, \$NTRN (depended on the network) to the contract address at 
 
 **Osmosis Testnet**: 
-[osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1h3d6r0fp4p3wp3q9gqwumghrxwgzahh87jrqxznsjdzzkjs7du4q95f6hj)
+[osmo1k46edlk4n33jm98lallgwypcpjagu8zmxjdq76s0v5yns0nphjkq2cwn3d](https://celatone.osmosis.zone/osmo-test-5/contracts/osmo1k46edlk4n33jm98lallgwypcpjagu8zmxjdq76s0v5yns0nphjkq2cwn3d)
 
 **Neutron Mainnet**: 
 Coming soon...
