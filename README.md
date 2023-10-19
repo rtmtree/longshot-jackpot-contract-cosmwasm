@@ -7,7 +7,7 @@ This work is a Cosmwasm version of [Aptos Longshot Jackpot](https://github.com/r
 
 ## Deployed DApp
 
-[Osmosis Testnet](https://longshot-jackpot.vercel.app/?network=testnet)
+[Osmosis Testnet](https://longshot-jackpot.vercel.app/?network=osmosistestnet)
 
 ## Deployed Smart Contract
 
